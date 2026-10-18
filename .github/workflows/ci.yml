@@ -16,6 +16,9 @@ jobs:
       - name: Test settings and resource safety
         shell: powershell
         run: ./tests/Test-Settings.ps1
+      - name: Test startup and settings IPC
+        shell: powershell
+        run: ./tests/Test-Startup.ps1
       - name: Test dialog
         shell: powershell
         run: ./tests/Test-UI.ps1

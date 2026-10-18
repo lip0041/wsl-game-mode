@@ -25,7 +25,7 @@ function Invoke-Executable([string]$Argument) {
     } finally { $process.Dispose() }
 }
 $version = (Invoke-Executable '--version').Trim()
-if ($version -ne '0.2.0') { throw ('Unexpected EXE version: ' + $version) }
+if ($version -ne '0.2.1') { throw ('Unexpected EXE version: ' + $version) }
 if ($CheckWsl) {
     $result = (Invoke-Executable '--check') | ConvertFrom-Json
     if (-not ($result.PSObject.Properties.Name -contains 'RunningDistros')) { throw 'Packaged self-check returned invalid data' }

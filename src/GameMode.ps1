@@ -3,14 +3,16 @@
 . (Join-Path $PSScriptRoot 'Core.ps1')
 . (Join-Path $PSScriptRoot 'SettingsCore.ps1')
 $config = Read-GameModeConfig (Join-Path $DataDirectory 'config.json')
-$steamGames = @(Get-SteamGames $config)
+$steamGames = @()
 if ($CheckOnly) {
+    $steamGames = @(Get-SteamGames $config)
     [pscustomobject]@{SteamGames=$steamGames; StandaloneGames=$config.StandaloneGames; RunningDistros=@(Get-RunningDistros); RunningGames=@(Find-RunningGames $config $steamGames @(Get-Process))} | ConvertTo-Json -Depth 7
     exit
 }
 
 $mutex = New-Object Threading.Mutex($false, 'Local\WslGameMode.monitor')
 if (-not $mutex.WaitOne(0)) { $mutex.Dispose(); exit }
+$settingsSignal = [Threading.EventWaitHandle]::new($false, [Threading.EventResetMode]::AutoReset, 'Local\WslGameMode.settings')
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 . (Join-Path $PSScriptRoot 'UI.ps1')
@@ -22,10 +24,12 @@ $script:handled = $false
 $script:detectedAt = $null
 $script:emptySince = $null
 $script:settingsOpen = $false
+$script:settingsWindow = $null
+$script:settingsRequestedAt = $null
 $script:busy = $false
 $script:currentKey = ''
 $script:lastError = ''
-$script:lastSteamRefresh = Get-Date
+$script:lastSteamRefresh = [datetime]::MinValue
 
 function Write-Log([string]$Message) {
     $log = Join-Path $DataDirectory 'game-mode.log'
@@ -130,24 +134,39 @@ function Invoke-Detection([switch]$Manual) {
 }
 
 function Open-GameModeSettings {
-    if ($script:busy -or $script:settingsOpen) { return }
+    if ($script:settingsWindow) {
+        if ($script:settingsWindow.WindowState -eq [Windows.WindowState]::Minimized) { $script:settingsWindow.WindowState = [Windows.WindowState]::Normal }
+        $null = $script:settingsWindow.Activate()
+        if ($script:settingsRequestedAt) { Write-Log ('Settings activated; request latency ms=' + [int]([datetime]::UtcNow - $script:settingsRequestedAt).TotalMilliseconds) }
+        return
+    }
+    if ($script:busy) { return }
     $script:settingsOpen = $true
     try {
-        $saved = Show-GameModeSettings (Join-Path $DataDirectory 'config.json') $DataDirectory
+        $script:settingsWindow = New-GameModeSettingsWindow (Join-Path $DataDirectory 'config.json') $DataDirectory
+        $script:settingsWindow.add_ContentRendered({
+            if ($script:settingsRequestedAt) {
+                Write-Log ('Settings rendered; request latency ms=' + [int]([datetime]::UtcNow - $script:settingsRequestedAt).TotalMilliseconds)
+            }
+        })
+        $null = $script:settingsWindow.ShowDialog()
+        $saved = $script:settingsWindow.Tag.Saved
         if ($saved) {
             $script:config = Read-GameModeConfig (Join-Path $DataDirectory 'config.json')
             $timer.Interval = [Math]::Max(2000,[int]$script:config.PollSeconds * 1000)
-            $script:steamGames = @(Get-SteamGames $script:config)
-            $script:lastSteamRefresh = Get-Date
+            $script:lastSteamRefresh = [datetime]::MinValue
             Write-Log 'Settings saved and applied.'
         }
     } catch { Write-Log ('Settings error: ' + $_.Exception.Message) }
-    finally { $script:settingsOpen = $false }
+    finally { if ($script:settingsWindow) { $script:settingsWindow.Close(); $script:settingsWindow = $null }; $script:settingsOpen = $false }
 }
 
-function Read-SettingsRequest {
+function Read-SettingsRequest([switch]$Initial) {
+    if ($script:busy) { return }
+    if (-not $Initial -and -not $settingsSignal.WaitOne(0)) { return }
     $request = Join-Path $DataDirectory 'open-settings.request'
-    if (-not $script:busy -and -not $script:settingsOpen -and (Test-Path -LiteralPath $request)) {
+    if (Test-Path -LiteralPath $request) {
+        $script:settingsRequestedAt = [datetime]::Parse((Get-Content -LiteralPath $request -Raw), [Globalization.CultureInfo]::InvariantCulture).ToUniversalTime()
         Remove-Item -LiteralPath $request
         Open-GameModeSettings
     }
@@ -172,8 +191,13 @@ $tray.add_DoubleClick({ Open-GameModeSettings })
 $exitItem.add_Click({ [Windows.Forms.Application]::Exit() })
 $timer = New-Object Windows.Forms.Timer
 $timer.Interval = [Math]::Max(2000, [int]$config.PollSeconds * 1000)
-$timer.add_Tick({ Read-SettingsRequest; Invoke-Detection })
+$timer.add_Tick({ Invoke-Detection })
 $timer.Start()
+# This lightweight timer only checks an in-memory signal, never scans games or WSL.
+$settingsTimer = New-Object Windows.Forms.Timer
+$settingsTimer.Interval = 100
+$settingsTimer.add_Tick({ Read-SettingsRequest })
+$settingsTimer.Start()
 Write-Log 'Watcher started. Shutdown always requires a fresh Yes confirmation.'
-try { Read-SettingsRequest; [Windows.Forms.Application]::Run() }
-finally { $timer.Stop(); $timer.Dispose(); $tray.Visible=$false; $tray.Dispose(); $menu.Dispose(); $mutex.ReleaseMutex(); $mutex.Dispose() }
+try { Read-SettingsRequest -Initial; [Windows.Forms.Application]::Run() }
+finally { $settingsTimer.Stop(); $settingsTimer.Dispose(); $settingsSignal.Dispose(); $timer.Stop(); $timer.Dispose(); $tray.Visible=$false; $tray.Dispose(); $menu.Dispose(); $mutex.ReleaseMutex(); $mutex.Dispose() }

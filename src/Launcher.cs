@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
@@ -11,12 +12,12 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Confirm, save WSL metadata, and shut down WSL when a game starts.")]
 [assembly: AssemblyCompany("WSL Game Mode contributors")]
 [assembly: AssemblyProduct("WSL Game Mode")]
-[assembly: AssemblyVersion("0.2.0.0")]
-[assembly: AssemblyFileVersion("0.2.0.0")]
+[assembly: AssemblyVersion("0.2.1.0")]
+[assembly: AssemblyFileVersion("0.2.1.0")]
 
 internal static class Launcher
 {
-    private const string Version = "0.2.0";
+    private const string Version = "0.2.1";
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
     [STAThread]
@@ -48,6 +49,24 @@ internal static class Launcher
             string programDirectory = machineInstall ? machineDirectory : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "WslGameMode");
             string scriptDirectory = Path.Combine(programDirectory, "releases", Version);
             Directory.CreateDirectory(dataDirectory);
+            // Reopening a running app only signals its UI; avoid script extraction,
+            // shortcut COM initialization, and starting another PowerShell process.
+            if (!check)
+            {
+                EventWaitHandle existing;
+                if (EventWaitHandle.TryOpenExisting(@"Local\WslGameMode.settings", out existing))
+                {
+                    using (existing)
+                    {
+                        if (!background)
+                        {
+                            File.WriteAllText(Path.Combine(dataDirectory, "open-settings.request"), DateTime.UtcNow.ToString("o"), Encoding.UTF8);
+                            existing.Set();
+                        }
+                    }
+                    return 0;
+                }
+            }
             Directory.CreateDirectory(scriptDirectory);
             foreach (string name in new string[] { "Core.ps1", "SettingsCore.ps1", "Settings.ps1", "GameMode.ps1", "UI.ps1", "app.ico" })
                 Extract(name, Path.Combine(scriptDirectory, name), true);

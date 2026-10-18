@@ -12,13 +12,16 @@ jobs:
       - name: Validate version tag
         shell: powershell
         run: |
-          if ($env:GITHUB_REF_NAME -ne 'v0.2.0') { throw 'Update the application version and release notes before tagging.' }
+          if ($env:GITHUB_REF_NAME -ne 'v0.2.1') { throw 'Update the application version and release notes before tagging.' }
       - name: Test detection and persistence
         shell: powershell
         run: ./tests/Test-Core.ps1
       - name: Test settings and resource safety
         shell: powershell
         run: ./tests/Test-Settings.ps1
+      - name: Test startup and settings IPC
+        shell: powershell
+        run: ./tests/Test-Startup.ps1
       - name: Test dialog
         shell: powershell
         run: ./tests/Test-UI.ps1
@@ -33,5 +36,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create $env:GITHUB_REF_NAME ./dist/WslGameMode.exe ./dist/WslGameMode-v0.2.0-win-x64.zip ./dist/SHA256SUMS.txt --verify-tag --title "WSL Game Mode $env:GITHUB_REF_NAME" --notes-file RELEASE_NOTES.md
+          gh release create $env:GITHUB_REF_NAME ./dist/WslGameMode.exe ./dist/WslGameMode-v0.2.1-win-x64.zip ./dist/SHA256SUMS.txt --verify-tag --title "WSL Game Mode $env:GITHUB_REF_NAME" --notes-file RELEASE_NOTES.md
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }

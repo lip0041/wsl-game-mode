@@ -46,7 +46,7 @@ if ($compilerExitCode -ne 0) { throw 'C# compilation failed.' }
 Copy-Item (Join-Path $PSScriptRoot 'README.md') $OutputDirectory -Force
 Copy-Item (Join-Path $PSScriptRoot 'LICENSE') $OutputDirectory -Force
 Copy-Item (Join-Path $PSScriptRoot 'Install-ProgramFiles.ps1') $OutputDirectory -Force
-$zip = Join-Path $OutputDirectory 'WslGameMode-v0.2.0-win-x64.zip'
+$zip = Join-Path $OutputDirectory 'WslGameMode-v0.2.1-win-x64.zip'
 Compress-Archive -Path @($exe,(Join-Path $OutputDirectory 'README.md'),(Join-Path $OutputDirectory 'LICENSE'),(Join-Path $OutputDirectory 'Install-ProgramFiles.ps1')) -DestinationPath $zip -Force
 $checksums = foreach ($file in @($exe,$zip)) { $hash=Get-FileHash -LiteralPath $file -Algorithm SHA256; $hash.Hash.ToLowerInvariant() + '  ' + [IO.Path]::GetFileName($file) }
 [IO.File]::WriteAllLines((Join-Path $OutputDirectory 'SHA256SUMS.txt'),$checksums,[Text.UTF8Encoding]::new($false))

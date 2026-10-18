@@ -4,7 +4,7 @@ Windows 游戏模式助手：识别游戏启动，确认后保存 WSL 状态信�
 
 ## 使用
 
-从 Releases 下载 EXE 或 Windows x64 ZIP，双击打开设置窗口。程序会驻留托盘，再次双击 EXE 或托盘图标可重新打开设置。
+从 Releases 下载 EXE 或 Windows x64 ZIP，双击打开设置窗口。程序会驻留托盘，再次双击 EXE 或托盘图标可重新打开设置。窗口请求独立于游戏检测周期处理；首次显示窗口不会等待 Steam 扫描。
 
 | 页面 | 功能 |
 |---|---|
@@ -66,6 +66,7 @@ EXE 为包含全部应用脚本的 .NET 启动器，只对子进程使用 Execut
 .\tests\Test-Core.ps1
 .\tests\Test-UI.ps1
 .\tests\Test-Settings.ps1
+.\tests\Test-Startup.ps1
 .\tests\Test-Release.ps1
 ```
 
