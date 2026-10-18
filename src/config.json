@@ -25,5 +25,11 @@
       ],
       "Root": ""
     }
-  ]
+  ],
+  "Resources": {
+    "CloseWsl": true,
+    "WslMode": "All",
+    "WslDistros": [],
+    "WindowsApps": []
+  }
 }

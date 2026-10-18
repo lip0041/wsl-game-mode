@@ -11,22 +11,23 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Confirm, save WSL metadata, and shut down WSL when a game starts.")]
 [assembly: AssemblyCompany("WSL Game Mode contributors")]
 [assembly: AssemblyProduct("WSL Game Mode")]
-[assembly: AssemblyVersion("0.1.0.0")]
-[assembly: AssemblyFileVersion("0.1.0.0")]
+[assembly: AssemblyVersion("0.2.0.0")]
+[assembly: AssemblyFileVersion("0.2.0.0")]
 
 internal static class Launcher
 {
-    private const string Version = "0.1.0";
+    private const string Version = "0.2.0";
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
     [STAThread]
     private static int Main(string[] args)
     {
         bool check = args.Length == 1 && args[0] == "--check";
+        bool background = args.Length == 1 && args[0] == "--background";
         try
         {
-            if (args.Length > 1 || (args.Length == 1 && !check && args[0] != "--version" && args[0] != "--uninstall"))
-                throw new ArgumentException("Usage: WslGameMode.exe [--check | --version | --uninstall]");
+            if (args.Length > 1 || (args.Length == 1 && !check && !background && args[0] != "--version" && args[0] != "--uninstall"))
+                throw new ArgumentException("Usage: WslGameMode.exe [--check | --background | --version | --uninstall]");
             if (args.Length == 1 && args[0] == "--version")
             {
                 Console.WriteLine(Version);
@@ -41,21 +42,30 @@ internal static class Launcher
             }
 
             string dataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WslGameMode");
-            string scriptDirectory = Path.Combine(dataDirectory, "releases", Version);
+            string currentExecutable = Assembly.GetExecutingAssembly().Location;
+            string machineDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WslGameMode");
+            bool machineInstall = String.Equals(Path.GetDirectoryName(currentExecutable), machineDirectory, StringComparison.OrdinalIgnoreCase);
+            string programDirectory = machineInstall ? machineDirectory : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "WslGameMode");
+            string scriptDirectory = Path.Combine(programDirectory, "releases", Version);
+            Directory.CreateDirectory(dataDirectory);
             Directory.CreateDirectory(scriptDirectory);
-            foreach (string name in new string[] { "Core.ps1", "GameMode.ps1", "UI.ps1", "app.ico" })
+            foreach (string name in new string[] { "Core.ps1", "SettingsCore.ps1", "Settings.ps1", "GameMode.ps1", "UI.ps1", "app.ico" })
                 Extract(name, Path.Combine(scriptDirectory, name), true);
             Extract("config.json", Path.Combine(dataDirectory, "config.json"), false);
 
-            string stableExecutable = Path.Combine(dataDirectory, "WslGameMode.exe");
-            string currentExecutable = Assembly.GetExecutingAssembly().Location;
+            string stableExecutable = Path.Combine(programDirectory, "WslGameMode.exe");
             if (!check && !String.Equals(currentExecutable, stableExecutable, StringComparison.OrdinalIgnoreCase))
                 File.Copy(currentExecutable, stableExecutable, true);
+
+            if (!check) EnsureStartMenuShortcut(stableExecutable);
+            if (!check && !background)
+                File.WriteAllText(Path.Combine(dataDirectory, "open-settings.request"), DateTime.UtcNow.ToString("o"), Encoding.UTF8);
 
             ProcessStartInfo info = new ProcessStartInfo();
             info.FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
             info.Arguments = "-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File "
                 + Quote(Path.Combine(scriptDirectory, "GameMode.ps1")) + " -DataDirectory " + Quote(dataDirectory)
+                + " -ExecutablePath " + Quote(stableExecutable)
                 + (check ? " -CheckOnly" : "");
             info.WorkingDirectory = dataDirectory;
             info.UseShellExecute = false;
@@ -88,6 +98,31 @@ internal static class Launcher
             if (check) Console.Error.WriteLine(ex.Message);
             else MessageBox.Show(ex.Message, "WSL Game Mode", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
+        }
+    }
+
+    private static void EnsureStartMenuShortcut(string executable)
+    {
+        object shell = null;
+        object shortcut = null;
+        try
+        {
+            Type shellType = Type.GetTypeFromProgID("WScript.Shell");
+            shell = Activator.CreateInstance(shellType);
+            string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "WSL Game Mode.lnk");
+            shortcut = shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { path });
+            Type shortcutType = shortcut.GetType();
+            shortcutType.InvokeMember("TargetPath", BindingFlags.SetProperty, null, shortcut, new object[] { executable });
+            shortcutType.InvokeMember("Arguments", BindingFlags.SetProperty, null, shortcut, new object[] { "" });
+            shortcutType.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, shortcut, new object[] { Path.GetDirectoryName(executable) });
+            shortcutType.InvokeMember("IconLocation", BindingFlags.SetProperty, null, shortcut, new object[] { executable + ",0" });
+            shortcutType.InvokeMember("Save", BindingFlags.InvokeMethod, null, shortcut, null);
+        }
+        catch { /* A policy that disables shortcuts must not stop monitoring. */ }
+        finally
+        {
+            if (shortcut != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(shortcut);
+            if (shell != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(shell);
         }
     }
 

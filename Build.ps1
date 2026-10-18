@@ -22,7 +22,7 @@ $icon = [Drawing.Icon]::FromHandle($bitmap.GetHicon())
 $stream = [IO.File]::Create($iconPath)
 try { $icon.Save($stream) } finally { $stream.Dispose(); $icon.Dispose(); $graphics.Dispose(); $bitmap.Dispose(); $background.Dispose(); $foreground.Dispose() }
 $argsList = @('/nologo','/target:winexe','/platform:x64','/optimize+','/reference:System.Windows.Forms.dll',('/out:' + $exe),('/win32manifest:' + (Join-Path $source 'app.manifest')),('/win32icon:' + $iconPath),('/resource:' + $iconPath + ',app.app.ico'))
-foreach ($name in @('Core.ps1','GameMode.ps1','UI.ps1','config.json')) { $argsList += '/resource:' + (Join-Path $source $name) + ',app.' + $name }
+foreach ($name in @('Core.ps1','SettingsCore.ps1','Settings.ps1','GameMode.ps1','UI.ps1','config.json')) { $argsList += '/resource:' + (Join-Path $source $name) + ',app.' + $name }
 $argsList += Join-Path $source 'Launcher.cs'
 $info = New-Object Diagnostics.ProcessStartInfo
 $info.FileName = $compiler
@@ -45,8 +45,9 @@ $process.Dispose()
 if ($compilerExitCode -ne 0) { throw 'C# compilation failed.' }
 Copy-Item (Join-Path $PSScriptRoot 'README.md') $OutputDirectory -Force
 Copy-Item (Join-Path $PSScriptRoot 'LICENSE') $OutputDirectory -Force
-$zip = Join-Path $OutputDirectory 'WslGameMode-v0.1.0-win-x64.zip'
-Compress-Archive -Path @($exe,(Join-Path $OutputDirectory 'README.md'),(Join-Path $OutputDirectory 'LICENSE')) -DestinationPath $zip -Force
+Copy-Item (Join-Path $PSScriptRoot 'Install-ProgramFiles.ps1') $OutputDirectory -Force
+$zip = Join-Path $OutputDirectory 'WslGameMode-v0.2.0-win-x64.zip'
+Compress-Archive -Path @($exe,(Join-Path $OutputDirectory 'README.md'),(Join-Path $OutputDirectory 'LICENSE'),(Join-Path $OutputDirectory 'Install-ProgramFiles.ps1')) -DestinationPath $zip -Force
 $checksums = foreach ($file in @($exe,$zip)) { $hash=Get-FileHash -LiteralPath $file -Algorithm SHA256; $hash.Hash.ToLowerInvariant() + '  ' + [IO.Path]::GetFileName($file) }
 [IO.File]::WriteAllLines((Join-Path $OutputDirectory 'SHA256SUMS.txt'),$checksums,[Text.UTF8Encoding]::new($false))
 Write-Output ('Built: ' + $exe)

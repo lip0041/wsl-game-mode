@@ -2,7 +2,7 @@
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 
-function New-GameModeDialog([string]$GameNames, [string[]]$Distros) {
+function Get-GameModePalette {
     $dark = $false
     try {
         $key = Get-Item 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'
@@ -13,13 +13,11 @@ function New-GameModeDialog([string]$GameNames, [string[]]$Distros) {
     } else {
         @{BackgroundColor='#F3F3F3'; SurfaceColor='#FFFFFF'; TextColor='#1A1A1A'; SecondaryColor='#606060'; BorderColor='#E5E5E5'; AccentColor='#0067C0'; AccentTextColor='#FFFFFF'; HoverColor='#F7F7F7'; AccentHoverColor='#005A9E'; NoticeColor='#9D5D00'}
     }
-    $xaml = @'
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="WSL 游戏模式" Width="600" SizeToContent="Height" ResizeMode="NoResize"
-        WindowStartupLocation="CenterScreen" Topmost="True" ShowInTaskbar="True"
-        FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="14"
-        Background="{BackgroundColor}" Foreground="{TextColor}" UseLayoutRounding="True">
+    return $palette
+}
+
+function Get-GameModeStyles {
+    return @'
   <Window.Resources>
     <Style x:Key="QuietButton" TargetType="Button">
       <Setter Property="Background" Value="{SurfaceColor}"/>
@@ -49,7 +47,45 @@ function New-GameModeDialog([string]$GameNames, [string[]]$Distros) {
       <Setter Property="BorderBrush" Value="{AccentColor}"/>
       <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Opacity" Value="0.9"/></Trigger></Style.Triggers>
     </Style>
+    <Style TargetType="TextBox"><Setter Property="Background" Value="{SurfaceColor}"/><Setter Property="Foreground" Value="{TextColor}"/><Setter Property="BorderBrush" Value="{BorderColor}"/></Style>
+    <Style TargetType="CheckBox"><Setter Property="Foreground" Value="{TextColor}"/></Style>
+    <Style TargetType="RadioButton"><Setter Property="Foreground" Value="{TextColor}"/></Style>
+    <Style x:Key="GridText" TargetType="TextBlock"><Setter Property="TextTrimming" Value="CharacterEllipsis"/><Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}"/></Style>
+    <Style TargetType="DataGridColumnHeader"><Setter Property="Background" Value="{SurfaceColor}"/><Setter Property="Foreground" Value="{SecondaryColor}"/><Setter Property="Padding" Value="8,10"/><Setter Property="BorderBrush" Value="{BorderColor}"/><Setter Property="BorderThickness" Value="0,0,0,1"/></Style>
+    <Style TargetType="DataGridCell"><Setter Property="Padding" Value="8,8"/><Setter Property="BorderThickness" Value="0"/></Style>
+    <Style TargetType="DataGridRow"><Setter Property="MinHeight" Value="38"/><Setter Property="BorderBrush" Value="{BorderColor}"/></Style>
+    <Style TargetType="TabItem">
+      <Setter Property="Foreground" Value="{SecondaryColor}"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem">
+        <Border x:Name="TabBorder" Padding="18,10" Margin="0,0,8,0" Background="Transparent" CornerRadius="5">
+          <ContentPresenter ContentSource="Header" HorizontalAlignment="Center"/>
+        </Border>
+        <ControlTemplate.Triggers>
+          <Trigger Property="IsSelected" Value="True"><Setter TargetName="TabBorder" Property="Background" Value="{SurfaceColor}"/><Setter Property="Foreground" Value="{TextColor}"/></Trigger>
+          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="TabBorder" Property="Background" Value="{SurfaceColor}"/></Trigger>
+        </ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style TargetType="TabControl"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabControl">
+      <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <TabPanel IsItemsHost="True" Margin="0,0,0,12"/>
+        <Border Grid.Row="1" Background="{SurfaceColor}" BorderBrush="{BorderColor}" BorderThickness="1" CornerRadius="8"><ContentPresenter ContentSource="SelectedContent"/></Border>
+      </Grid>
+    </ControlTemplate></Setter.Value></Setter></Style>
   </Window.Resources>
+'@
+}
+
+function New-GameModeDialog([string]$GameNames, [string[]]$Distros, [string[]]$Applications=@()) {
+    $palette = Get-GameModePalette
+    $xaml = @'
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="WSL 游戏模式" Width="600" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen" Topmost="True" ShowInTaskbar="True"
+        FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="14"
+        Background="{BackgroundColor}" Foreground="{TextColor}" UseLayoutRounding="True">
+__GAME_MODE_STYLES__
   <Grid Background="{BackgroundColor}">
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <StackPanel Margin="28,24,28,26">
@@ -70,7 +106,7 @@ function New-GameModeDialog([string]$GameNames, [string[]]$Distros) {
         <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE7BA;" Foreground="{NoticeColor}" FontSize="18" Margin="0,2,0,0"/>
         <StackPanel Grid.Column="1">
           <TextBlock Text="请先保存正在进行的工作" FontWeight="SemiBold"/>
-          <TextBlock Text="视频生成、推理进度及未保存内容无法自动恢复。关闭后，WSL 中的终端和 Codex 会话将断开。" Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{SecondaryColor}" LineHeight="22"/>
+          <TextBlock Text="未保存内容和视频生成、推理进度无法自动恢复。所选 WSL 会话会断开，Windows 应用仅尝试正常退出。" Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{SecondaryColor}" LineHeight="22"/>
         </StackPanel>
       </Grid>
     </StackPanel>
@@ -78,20 +114,22 @@ function New-GameModeDialog([string]$GameNames, [string[]]$Distros) {
       <Grid>
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <Button x:Name="DeferButton" Content="暂不关闭" Width="120" HorizontalAlignment="Left" IsCancel="True" IsDefault="True" Style="{StaticResource QuietButton}"/>
-        <Button x:Name="ConfirmButton" Content="保存状态并关闭 WSL" Grid.Column="1" Style="{StaticResource PrimaryButton}"/>
+        <Button x:Name="ConfirmButton" Content="保存并释放所选资源" Grid.Column="1" Style="{StaticResource PrimaryButton}"/>
       </Grid>
     </Border>
   </Grid>
 </Window>
 '@
+    $xaml = $xaml.Replace('__GAME_MODE_STYLES__', (Get-GameModeStyles))
     foreach ($name in $palette.Keys) { $xaml = $xaml.Replace(('{' + $name + '}'), $palette[$name]) }
     $reader = [Xml.XmlNodeReader]::new([xml]$xaml)
     $dialog = [Windows.Markup.XamlReader]::Load($reader)
     $reader.Close()
     $iconPath = Join-Path $PSScriptRoot 'app.ico'
     if (Test-Path -LiteralPath $iconPath) { $dialog.Icon = [Windows.Media.Imaging.BitmapFrame]::Create([Uri]::new($iconPath)) }
-    $dialog.FindName('GameLabel').Text = '检测到 ' + $GameNames + '，可关闭 WSL 释放系统资源。'
-    $dialog.FindName('DistroLabel').Text = $Distros -join '、'
+    $dialog.FindName('GameLabel').Text = '检测到 ' + $GameNames + '，可释放你选择的系统资源。'
+    $descriptions = @($Distros | ForEach-Object { 'WSL · ' + $_ }) + @($Applications | ForEach-Object { '应用 · ' + $_ })
+    $dialog.FindName('DistroLabel').Text = $descriptions -join '、'
     # Resolve the owner through the sender; no dependency on a function-local event closure.
     $dialog.FindName('ConfirmButton').add_Click({ param($sender,$eventArgs); [Windows.Window]::GetWindow($sender).DialogResult = $true })
     $dialog.FindName('DeferButton').add_Click({ param($sender,$eventArgs); [Windows.Window]::GetWindow($sender).DialogResult = $false })
@@ -99,8 +137,8 @@ function New-GameModeDialog([string]$GameNames, [string[]]$Distros) {
     return $dialog
 }
 
-function Show-GameModeConfirmation([string]$GameNames, [string[]]$Distros) {
-    $dialog = New-GameModeDialog -GameNames $GameNames -Distros $Distros
+function Show-GameModeConfirmation([string]$GameNames, [string[]]$Distros, [string[]]$Applications=@()) {
+    $dialog = New-GameModeDialog -GameNames $GameNames -Distros $Distros -Applications $Applications
     try {
         if ($dialog.ShowDialog() -eq $true) { return [Windows.Forms.DialogResult]::Yes }
         return [Windows.Forms.DialogResult]::No
