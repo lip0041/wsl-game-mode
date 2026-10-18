@@ -1,0 +1,6 @@
+/dist/
+/state/
+*.log
+*.log.old
+*.user
+*.suo

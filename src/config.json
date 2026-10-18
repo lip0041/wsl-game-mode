@@ -1,0 +1,29 @@
+{
+  "PollSeconds": 10,
+  "DetectionGraceSeconds": 15,
+  "EnableSteam": true,
+  "SteamExcludedAppIds": [
+    "1787090",
+    "228980",
+    "431960",
+    "993090"
+  ],
+  "SteamExcludedNamePattern": "(?i)MyDockFinder|Wallpaper Engine|Lossless Scaling|Steamworks|Soundpad|fpsVR",
+  "StandaloneGames": [
+    {
+      "Name": "永劫无间",
+      "ProcessNames": [
+        "NarakaBladepoint"
+      ],
+      "Root": ""
+    },
+    {
+      "Name": "三角洲行动",
+      "ProcessNames": [
+        "DeltaForceClient-Win64-Shipping",
+        "DeltaForceClient"
+      ],
+      "Root": ""
+    }
+  ]
+}
